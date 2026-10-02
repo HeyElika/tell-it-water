@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Chumi">
+  <meta name="theme-color" content="#121821">
+  <meta name="description" content="Tell it to water. Hold, speak, let go.">
+  <title>Chumi</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-state="idle">
+  <canvas id="water" aria-hidden="true"></canvas>
+
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">Tell it to</span>
+      <span class="brand-word">Water</span>
+    </div>
+    <h1 class="title">Chumi</h1>
+  </header>
+
+  <main class="center" aria-live="polite">
+    <p class="words" id="words"></p>
+    <p class="heard" id="heard">You were heard</p>
+    <p class="note" id="note" hidden></p>
+  </main>
+
+  <footer class="bottom">
+    <button class="talk" id="talk" type="button" aria-label="Hold to speak, release to let go">
+      <span class="halo" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11.5" rx="3"></rect>
+        <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+        <path d="M12 18v3"></path>
+      </svg>
+    </button>
+    <p class="hint-title" id="hintTitle">Hold to speak</p>
+    <p class="hint-sub">Release to let go</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

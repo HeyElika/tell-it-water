@@ -1,0 +1,245 @@
+/* Layout follows the Chumi screen on the moodboard: brand top-left, app name centered,
+   the spoken words in the middle, hold-to-speak control at the bottom. */
+:root {
+  --ink: #121821;
+  --steel: #3c5a72;
+  --foam: #eef2f0;
+  --foam-soft: rgba(238, 242, 240, 0.78);
+  --foam-dim: rgba(238, 242, 240, 0.5);
+  --foam-faint: rgba(238, 242, 240, 0.32);
+  --glass: rgba(238, 242, 240, 0.07);
+  --glass-press: rgba(238, 242, 240, 0.16);
+  --glass-line: rgba(238, 242, 240, 0.22);
+  --serif: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino', Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  color: var(--foam);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background:
+    radial-gradient(120% 40% at 40% 32%, var(--steel) 0%, transparent 70%),
+    var(--ink);
+}
+
+p, h1 { margin: 0; }
+
+/* ---------- Header ---------- */
+.top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) 24px 0;
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--foam-dim);
+}
+
+.brand-word {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--foam-soft);
+}
+
+.title {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 18px);
+  transform: translateX(-50%);
+  font-family: var(--serif);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1;
+  color: rgba(238, 242, 240, 0.62);
+}
+
+/* ---------- Center: words and answer ---------- */
+.center {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 22%;
+  bottom: 30%;
+  display: grid;
+  place-items: center;
+  padding-inline: 32px;
+  pointer-events: none;
+}
+
+.words, .heard, .note {
+  grid-area: 1 / 1;
+  text-align: center;
+  text-wrap: balance;
+  font-family: var(--serif);
+}
+
+.words {
+  max-width: 22ch;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.22;
+  color: var(--foam-soft);
+  text-shadow: 0 1px 30px rgba(18, 24, 33, 0.6);
+  transition: opacity 1.8s ease, transform 2.2s var(--ease-out), filter 2s ease;
+}
+
+.words.placeholder {
+  color: var(--foam-faint);
+  font-style: italic;
+}
+
+.words.sink {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
+  filter: blur(10px);
+}
+
+.heard {
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--foam);
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(6px);
+  transition: opacity 1.2s ease, transform 1.4s var(--ease-out), filter 1.2s ease;
+  text-shadow: 0 1px 30px rgba(18, 24, 33, 0.5);
+}
+
+body[data-state="heard"] .heard {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+.note {
+  max-width: 26ch;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--foam-soft);
+}
+
+/* ---------- Bottom: hold to speak ---------- */
+.bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.talk {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  color: var(--foam);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.35s var(--ease-out), background-color 0.35s ease, border-color 0.35s ease;
+}
+
+.talk:focus-visible {
+  outline: 2px solid var(--foam);
+  outline-offset: 4px;
+}
+
+.talk svg { position: relative; }
+
+.halo {
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-line);
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-state="listening"] .talk {
+  transform: scale(1.1);
+  background: var(--glass-press);
+  border-color: rgba(238, 242, 240, 0.36);
+}
+
+body[data-state="listening"] .halo {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%   { opacity: 0.6; transform: scale(1); }
+  70%  { opacity: 0;   transform: scale(1.55); }
+  100% { opacity: 0;   transform: scale(1.55); }
+}
+
+.hint-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--foam-dim);
+}
+
+.hint-sub {
+  font-size: 13px;
+  color: var(--foam-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-state="listening"] .halo { animation: none; opacity: 0.4; }
+  .words, .heard { transition-duration: 0.01s; }
+}
