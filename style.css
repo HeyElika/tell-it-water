@@ -1,19 +1,18 @@
-/* Layout follows the Chumi screen on the moodboard: brand top-left, app name centered,
-   the spoken words in the middle, hold-to-speak control at the bottom. */
+/* Layout: app name centered at the top, water runs down the middle, the spoken words
+   sit under where it lands, and the glass hold-to-speak button rests at the bottom.
+   The glass itself is drawn by the water shader so it can refract what is beneath it. */
 :root {
-  --ink: #121821;
-  --steel: #3c5a72;
-  --foam: #eef2f0;
-  --foam-soft: rgba(238, 242, 240, 0.78);
-  --foam-dim: rgba(238, 242, 240, 0.5);
-  --foam-faint: rgba(238, 242, 240, 0.32);
-  --glass: rgba(238, 242, 240, 0.07);
-  --glass-press: rgba(238, 242, 240, 0.16);
-  --glass-line: rgba(238, 242, 240, 0.22);
+  --sky: #7ea3be;
+  --mist: #a0bed3;
+  --text: #ffffff;
+  --text-soft: rgba(255, 255, 255, 0.86);
+  --text-dim: rgba(255, 255, 255, 0.72);
+  --text-faint: rgba(255, 255, 255, 0.6);
+  --shade: rgba(52, 74, 96, 0.32);
   --serif: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino', Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -28,8 +27,8 @@ html, body {
 body {
   position: fixed;
   inset: 0;
-  background: var(--ink);
-  color: var(--foam);
+  background: var(--sky);
+  color: var(--text);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   -webkit-user-select: none;
@@ -46,8 +45,9 @@ canvas {
   height: 100%;
   display: block;
   background:
-    radial-gradient(120% 40% at 40% 32%, var(--steel) 0%, transparent 70%),
-    var(--ink);
+    radial-gradient(60% 35% at 65% 52%, #c4ab99 0%, transparent 70%),
+    radial-gradient(70% 30% at 20% 100%, #f0eee9 0%, transparent 70%),
+    linear-gradient(180deg, var(--sky), var(--mist));
 }
 
 p, h1 { margin: 0; }
@@ -58,50 +58,28 @@ p, h1 { margin: 0; }
   top: 0;
   left: 0;
   right: 0;
-  padding: calc(env(safe-area-inset-top, 0px) + 20px) 24px 0;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+  display: flex;
+  justify-content: center;
   pointer-events: none;
 }
 
-.brand {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.eyebrow {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--foam-dim);
-}
-
-.brand-word {
-  font-family: var(--serif);
-  font-size: 22px;
-  font-weight: 400;
-  color: var(--foam-soft);
-}
-
 .title {
-  position: absolute;
-  left: 50%;
-  top: calc(env(safe-area-inset-top, 0px) + 18px);
-  transform: translateX(-50%);
   font-family: var(--serif);
   font-size: 44px;
   font-weight: 400;
   line-height: 1;
-  color: rgba(238, 242, 240, 0.62);
+  color: var(--text-soft);
+  text-shadow: 0 1px 24px var(--shade);
 }
 
-/* ---------- Center: words and answer ---------- */
+/* ---------- Words and answer, under where the water lands ---------- */
 .center {
   position: fixed;
   left: 0;
   right: 0;
-  top: 22%;
-  bottom: 30%;
+  top: 52%;
+  bottom: 24%;
   display: grid;
   place-items: center;
   padding-inline: 32px;
@@ -113,20 +91,20 @@ p, h1 { margin: 0; }
   text-align: center;
   text-wrap: balance;
   font-family: var(--serif);
+  text-shadow: 0 1px 26px var(--shade);
 }
 
 .words {
   max-width: 22ch;
-  font-size: 28px;
-  font-weight: 300;
+  font-size: 27px;
+  font-weight: 400;
   line-height: 1.22;
-  color: var(--foam-soft);
-  text-shadow: 0 1px 30px rgba(18, 24, 33, 0.6);
+  color: var(--text-soft);
   transition: opacity 1.8s ease, transform 2.2s var(--ease-out), filter 2s ease;
 }
 
 .words.placeholder {
-  color: var(--foam-faint);
+  color: var(--text-faint);
   font-style: italic;
 }
 
@@ -138,14 +116,13 @@ p, h1 { margin: 0; }
 
 .heard {
   font-size: 40px;
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1.1;
-  color: var(--foam);
+  color: var(--text);
   opacity: 0;
   transform: translateY(10px);
   filter: blur(6px);
   transition: opacity 1.2s ease, transform 1.4s var(--ease-out), filter 1.2s ease;
-  text-shadow: 0 1px 30px rgba(18, 24, 33, 0.5);
 }
 
 body[data-state="heard"] .heard {
@@ -159,7 +136,7 @@ body[data-state="heard"] .heard {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.45;
-  color: var(--foam-soft);
+  color: var(--text-soft);
 }
 
 /* ---------- Bottom: hold to speak ---------- */
@@ -177,43 +154,50 @@ body[data-state="heard"] .heard {
 
 .talk {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 88px;
+  height: 88px;
   margin-bottom: 14px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  border: 1px solid var(--glass-line);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  backdrop-filter: blur(18px) saturate(140%);
-  color: var(--foam);
+  background: transparent;
+  color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
   touch-action: none;
   -webkit-touch-callout: none;
-  transition: transform 0.35s var(--ease-out), background-color 0.35s ease, border-color 0.35s ease;
+}
+
+/* Without WebGL, fall back to a CSS frosted glass */
+.no-gl .talk {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.22);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7), 0 10px 30px rgba(52, 74, 96, 0.18);
 }
 
 .talk:focus-visible {
-  outline: 2px solid var(--foam);
-  outline-offset: 4px;
+  outline: 2px solid var(--text);
+  outline-offset: 6px;
 }
 
-.talk svg { position: relative; }
+.talk svg {
+  position: relative;
+  filter: drop-shadow(0 1px 6px var(--shade));
+  transition: transform 0.35s var(--ease-out);
+}
+
+body[data-state="listening"] .talk svg { transform: scale(1.08); }
 
 .halo {
   position: absolute;
-  inset: -1px;
+  inset: 0;
   border-radius: 50%;
-  border: 1px solid var(--glass-line);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   opacity: 0;
   pointer-events: none;
-}
-
-body[data-state="listening"] .talk {
-  transform: scale(1.1);
-  background: var(--glass-press);
-  border-color: rgba(238, 242, 240, 0.36);
 }
 
 body[data-state="listening"] .halo {
@@ -221,22 +205,24 @@ body[data-state="listening"] .halo {
 }
 
 @keyframes breathe {
-  0%   { opacity: 0.6; transform: scale(1); }
-  70%  { opacity: 0;   transform: scale(1.55); }
-  100% { opacity: 0;   transform: scale(1.55); }
+  0%   { opacity: 0.55; transform: scale(1.07); }
+  70%  { opacity: 0;    transform: scale(1.6); }
+  100% { opacity: 0;    transform: scale(1.6); }
 }
 
 .hint-title {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--foam-dim);
+  color: var(--text-dim);
+  text-shadow: 0 1px 14px var(--shade);
 }
 
 .hint-sub {
   font-size: 13px;
-  color: var(--foam-faint);
+  color: var(--text-faint);
+  text-shadow: 0 1px 14px var(--shade);
 }
 
 @media (prefers-reduced-motion: reduce) {

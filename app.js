@@ -31,7 +31,7 @@
     return v;
   }`;
 
-  // The slow, blurred colour field that sits under the water.
+  // Airy colour field: powder-blue sky, warm taupe light, cream cloud, soft white haze.
   const GRADIENT_FRAG = `#version 300 es
   precision highp float;
   in vec2 vUv;
@@ -40,31 +40,36 @@
   uniform float uAspect;
   uniform float uSpeed;
 
-  const vec3 C_INK   = vec3(0.071, 0.094, 0.129);
-  const vec3 C_STEEL = vec3(0.235, 0.353, 0.447);
-  const vec3 C_TIDE  = vec3(0.435, 0.624, 0.651);
-  const vec3 C_SAGE  = vec3(0.561, 0.710, 0.561);
-  const vec3 C_GLOW  = vec3(0.875, 0.890, 0.627);
+  const vec3 C_SKY_TOP = vec3(0.447, 0.596, 0.714);
+  const vec3 C_SKY     = vec3(0.553, 0.682, 0.776);
+  const vec3 C_DEEP    = vec3(0.400, 0.545, 0.659);
+  const vec3 C_TAUPE   = vec3(0.722, 0.635, 0.573);
+  const vec3 C_PEACH   = vec3(0.835, 0.737, 0.671);
+  const vec3 C_CREAM   = vec3(0.941, 0.933, 0.914);
+  const vec3 C_HAZE    = vec3(0.871, 0.902, 0.918);
   ${NOISE}
 
+  float blob(vec2 p, vec2 c, float r) {
+    vec2 d = p - c;
+    return exp(-dot(d, d) / (r * r));
+  }
+
   void main() {
-    vec2 p = vec2(vUv.x * uAspect, vUv.y);
+    float A = uAspect;
+    vec2 p = vec2(vUv.x * A, vUv.y);
     float t = uTime * uSpeed;
-    vec2 q = vec2(fbm(p * 0.8 + vec2(0.0, t)), fbm(p * 0.8 + vec2(5.2, -t)));
-    vec2 r = vec2(fbm(p * 0.9 + 1.8 * q + vec2(1.7, 9.2) + t * 1.2),
-                  fbm(p * 0.9 + 1.8 * q + vec2(8.3, 2.8) - t * 0.9));
-    float f = fbm(p * 0.7 + r);
+    // Warp the space so blob edges read as cloud and mist rather than circles
+    vec2 w = vec2(fbm(p * 1.3 + vec2(t * 0.7, 0.0)), fbm(p * 1.3 + vec2(4.0, -t * 0.6))) - 0.5;
+    vec2 q = p + w * 0.32;
 
-    // A drifting band of hazy light across the upper half, as on the Chumi screen
-    float bandY = 0.66 + 0.07 * sin(t * 2.0 + p.x * 1.4) + (q.x - 0.5) * 0.18;
-    float band = exp(-pow((vUv.y - bandY) / 0.2, 2.0));
-
-    vec3 col = C_INK;
-    col = mix(col, C_STEEL, clamp(band * 0.8 + smoothstep(0.35, 0.8, f) * 0.4, 0.0, 1.0));
-    col = mix(col, C_TIDE, smoothstep(0.5, 0.9, f) * 0.5 * (0.35 + band));
-    col = mix(col, C_SAGE, smoothstep(0.55, 0.95, r.x) * 0.3 * (0.4 + band));
-    col = mix(col, C_GLOW, smoothstep(0.72, 1.0, r.y * q.x * 1.7) * 0.2);
-    col *= mix(0.72, 1.0, smoothstep(0.0, 0.75, vUv.y));
+    vec3 col = mix(C_SKY, C_SKY_TOP, smoothstep(0.15, 1.0, vUv.y));
+    col = mix(col, C_DEEP, blob(q, vec2(A * 1.05, 0.98 + 0.03 * sin(t * 1.1)), 0.36) * 0.55);
+    col = mix(col, C_DEEP, blob(q, vec2(-0.05, 0.62 + 0.05 * cos(t * 0.9)), 0.24) * 0.3);
+    col = mix(col, C_TAUPE, blob(q, vec2(A * (0.64 + 0.12 * sin(t * 0.8 + 1.0)), 0.44 + 0.06 * sin(t * 1.2)), 0.27) * 0.8);
+    col = mix(col, C_PEACH, blob(q, vec2(A * (0.6 + 0.1 * sin(t * 0.8 + 1.4)), 0.47 + 0.05 * sin(t * 1.2 + 0.3)), 0.15) * 0.55);
+    col = mix(col, C_HAZE, blob(q, vec2(A * (0.38 + 0.1 * cos(t * 0.7)), 0.8 + 0.04 * sin(t)), 0.25) * 0.75);
+    col = mix(col, C_CREAM, blob(q, vec2(A * (0.02 + 0.08 * sin(t * 1.3)), 0.02 + 0.04 * cos(t)), 0.26) * 0.85);
+    col = mix(col, C_HAZE, blob(q, vec2(A * (0.95 + 0.06 * cos(t * 1.1)), 0.2), 0.2) * 0.4);
     outColor = vec4(col, 1.0);
   }`;
 
@@ -87,9 +92,9 @@
     float u = texture(uState, vUv + vec2(0.0, uTexel.y)).r;
     float avg = (l + r + d + u) * 0.25;
     info.g += (avg - info.r) * 1.96;
-    info.g *= 0.993;
+    info.g *= 0.992;
     info.r += info.g;
-    info.r *= 0.9992;
+    info.r *= 0.999;
 
     for (int i = 0; i < 8; i++) {
       if (i >= uCount) break;
@@ -102,93 +107,117 @@
     outColor = info;
   }`;
 
-  // Final composite: refraction through the surface, light on the ripples,
-  // falling drops, crowns and the rebound jet.
+  // Final composite: water surface, the running stream, foam where it lands,
+  // and the glass button refracting everything beneath it.
   const RENDER_FRAG = `#version 300 es
   precision highp float;
   in vec2 vUv;
   out vec4 outColor;
   uniform sampler2D uGrad;
   uniform sampler2D uSim;
-  uniform vec2 uRes;       // css px
+  uniform vec2 uRes;        // css px, y up
   uniform vec2 uSimTexel;
   uniform float uTime;
-  uniform vec4 uFall[6];   // x px, y px, progress 0..1, radius px
-  uniform vec4 uCrown[8];  // x px, y px, age s, radius px
-
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  uniform vec4 uStreamA;    // x, impact y, top end y, bottom end y
+  uniform vec4 uStreamB;    // half width at top, half width at impact, visible, foam
+  uniform vec4 uGlass;      // x, y, radius, press
+  ${NOISE}
 
   const vec3 LIGHT = vec3(-0.22, 0.42, 1.0);
-  const vec3 SKY = vec3(0.86, 0.92, 0.96);
+  const vec3 WHITE = vec3(0.98, 0.985, 0.99);
+
+  vec3 water(vec2 uv) {
+    vec3 L = normalize(LIGHT);
+    vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+    float hl = texture(uSim, uv - vec2(uSimTexel.x, 0.0)).r;
+    float hr = texture(uSim, uv + vec2(uSimTexel.x, 0.0)).r;
+    float hd = texture(uSim, uv - vec2(0.0, uSimTexel.y)).r;
+    float hu = texture(uSim, uv + vec2(0.0, uSimTexel.y)).r;
+    vec3 n = normalize(vec3((hl - hr) * 1.6, (hd - hu) * 1.6, 1.0));
+    vec3 col = texture(uGrad, uv + n.xy * 70.0 / uRes).rgb;
+    float facing = dot(n.xy, normalize(L.xy));
+    col *= 1.0 + clamp(facing * 1.8, -0.2, 0.22);
+    float nh = max(dot(n, H), 0.0);
+    col += WHITE * (pow(nh, 1400.0) * 0.9 + pow(nh, 160.0) * 0.08);
+    return col;
+  }
 
   void main() {
     vec2 px = vUv * uRes;
-    vec3 L = normalize(LIGHT);
-    vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+    vec3 col = water(vUv);
 
-    // Surface normal from the height field
-    float hl = texture(uSim, vUv - vec2(uSimTexel.x, 0.0)).r;
-    float hr = texture(uSim, vUv + vec2(uSimTexel.x, 0.0)).r;
-    float hd = texture(uSim, vUv - vec2(0.0, uSimTexel.y)).r;
-    float hu = texture(uSim, vUv + vec2(0.0, uSimTexel.y)).r;
-    vec3 n = normalize(vec3((hl - hr) * 1.6, (hd - hu) * 1.6, 1.0));
-
-    // Refraction of the colour field below
-    vec2 offPx = n.xy * 70.0;
-    vec3 col = texture(uGrad, vUv + offPx / uRes).rgb;
-
-    // Slopes facing the light catch sky, slopes facing away darken
-    float facing = dot(n.xy, normalize(L.xy));
-    col *= 1.0 + clamp(facing * 2.2, -0.22, 0.45);
-    float fres = pow(1.0 - n.z, 1.5);
-    col = mix(col, SKY * 0.55, clamp(fres * 1.4, 0.0, 0.25));
-
-    // Specular glints on the ring crests
-    float nh = max(dot(n, H), 0.0);
-    col += vec3(1.0, 0.98, 0.95) * (pow(nh, 1400.0) * 1.1 + pow(nh, 160.0) * 0.08);
-
-    // Crowns and splash cores right after impact
-    for (int i = 0; i < 8; i++) {
-      vec4 c = uCrown[i];
-      if (c.w <= 0.0) continue;
-      float a = c.z;
-      vec2 dv = px - c.xy;
-      float d = length(dv);
-      float R = c.w * (0.8 + 1.8 * sqrt(clamp(a / 0.12, 0.0, 1.0)));
-      float ring = exp(-pow((d - R) / 0.9, 2.0));
-      float ang = atan(dv.y, dv.x);
-      float beads = pow(0.5 + 0.5 * cos(ang * 11.0 + c.x * 0.37), 4.0);
-      float fade = 1.0 - smoothstep(0.0, 0.12, a);
-      col += SKY * ring * (0.25 + 0.35 * beads) * fade * 0.35;
-      col += SKY * exp(-(d * d) / (c.w * c.w * 0.8)) * exp(-a * 30.0) * 0.3;
+    // ---------- Running stream ----------
+    float impactY = uStreamA.y;
+    if (uStreamB.z > 0.5 && px.y <= uStreamA.z && px.y >= uStreamA.w) {
+      float span = max(1.0, uRes.y + 20.0 - impactY);
+      float k = clamp((px.y - impactY) / span, 0.0, 1.0);   // 0 at the surface, 1 at the top
+      // A falling stream speeds up and thins; near the bottom it starts to bead
+      float hw = mix(uStreamB.y, uStreamB.x, sqrt(k));
+      hw *= 1.0 + 0.13 * (1.0 - k) * (1.0 - k) * sin(px.y * 0.32 + uTime * 52.0)
+                + 0.04 * sin(px.y * 0.09 - uTime * 21.0);
+      float xc = uStreamA.x + sin(px.y * 0.018 + uTime * 2.7) * 0.7 * (1.0 - k);
+      float s = (px.x - xc) / hw;
+      if (abs(s) < 1.0) {
+        float z = sqrt(1.0 - s * s);
+        // A cylinder of water shows the world behind it flipped and stretched
+        vec3 sc = texture(uGrad, vec2(xc - s * hw * 5.0, px.y + 30.0) / uRes).rgb;
+        sc *= mix(0.7, 1.0, pow(z, 0.7));
+        float flowA = noise(vec2(s * 2.5 + 3.0, (px.y + uTime * 1400.0) * 0.012));
+        float flowB = noise(vec2(s * 6.0, (px.y + uTime * 1750.0) * 0.035));
+        sc *= 0.9 + 0.18 * flowA;
+        sc += WHITE * exp(-pow((s + 0.45) / 0.11, 2.0)) * (0.4 + 0.6 * flowB) * 0.5;
+        sc += WHITE * exp(-pow((s - 0.64) / 0.07, 2.0)) * 0.22;
+        float edge = 1.0 - smoothstep(1.0 - 1.3 / hw, 1.0, abs(s));
+        float ends = smoothstep(uStreamA.w, uStreamA.w + 5.0, px.y)
+                   * (1.0 - smoothstep(uStreamA.z - 5.0, uStreamA.z, px.y));
+        col = mix(col, sc, edge * ends);
+      }
     }
 
-    // Falling drops: shadow and focused light on the surface, then the drop itself
-    for (int i = 0; i < 6; i++) {
-      vec4 f = uFall[i];
-      if (f.w <= 0.0) continue;
-      float k = clamp(f.z, 0.0, 1.0);
-      float height = (1.0 - k) * 160.0;
-      vec2 sc = f.xy + vec2(0.22, -0.42) * height * 0.45;
-      float sd = length(px - sc);
-      float shadowR = f.w * mix(3.2, 1.3, k);
-      col *= 1.0 - (1.0 - smoothstep(0.0, shadowR, sd)) * mix(0.12, 0.4, k);
-      col += SKY * exp(-(sd * sd) / max(0.6, f.w * 0.35)) * 0.5 * k;
+    // ---------- Foam and air where the stream lands ----------
+    float foamAmt = uStreamB.w;
+    if (foamAmt > 0.001) {
+      vec2 dv = (px - vec2(uStreamA.x, impactY)) * vec2(1.0, 1.6);
+      float d2 = dot(dv, dv);
+      float r = uStreamB.y * 3.6;
+      float f1 = noise(dv * 0.42 + vec2(uTime * 13.0, -uTime * 9.0));
+      float f2 = noise(dv * 0.95 + vec2(-uTime * 21.0, uTime * 17.0));
+      float foam = smoothstep(0.5, 0.85, f1 * 0.6 + f2 * 0.5) * exp(-d2 / (r * r));
+      col = mix(col, WHITE, foam * 0.85 * foamAmt);
+      col += WHITE * exp(-d2 / (r * r * 0.5)) * 0.1 * foamAmt;
+    }
 
-      float rr = f.w * mix(2.3, 1.0, k * k);
-      vec2 q = (px - f.xy) / rr;
-      float qq = dot(q, q);
-      if (qq < 1.0) {
-        float z = sqrt(1.0 - qq);
-        vec3 dn = vec3(q, z);
-        // A water sphere shows a small, inverted image of what is behind it
-        vec2 suv = (f.xy - q * rr * 5.0) / uRes;
-        vec3 dc = texture(uGrad, suv).rgb * 1.15;
-        dc *= mix(0.35, 1.05, pow(z, 0.6));
-        dc += vec3(1.0) * pow(max(dot(dn, H), 0.0), 90.0) * 1.6;
-        dc += SKY * pow(max(dot(dn, normalize(vec3(0.45, -0.7, 0.4))), 0.0), 5.0) * 0.35;
-        float edge = 1.0 - smoothstep(1.0 - 1.4 / rr, 1.0, sqrt(qq));
-        col = mix(col, dc, edge * smoothstep(0.0, 0.12, k));
+    // ---------- Glass button ----------
+    vec2 gv = px - uGlass.xy;
+    float gd = length(gv);
+    float R = uGlass.z;
+    if (R > 0.0) {
+      float sd = length(px - uGlass.xy - vec2(0.0, -7.0));
+      float shadow = exp(-pow(max(sd - R * 0.82, 0.0) / 18.0, 2.0)) * smoothstep(R - 1.0, R + 3.0, gd);
+      col *= 1.0 - shadow * 0.1;
+
+      if (gd < R + 1.0) {
+        float edge = R - gd;
+        float tt = clamp(edge / (R * 0.42), 0.0, 1.0);
+        float bend = pow(1.0 - tt, 2.2);
+        vec2 dir = gd > 0.001 ? gv / gd : vec2(0.0);
+        // Liquid-glass lens: strong bend at the rim, gentle magnification inside
+        vec2 off = -dir * bend * R * 0.6 - gv * 0.12;
+        vec3 g;
+        g.r = water((px + off * 1.07) / uRes).r;
+        g.g = water((px + off) / uRes).g;
+        g.b = water((px + off * 0.93) / uRes).b;
+        g = mix(g, WHITE, 0.05 + 0.07 * uGlass.w);
+        g *= 1.04;
+
+        vec3 gn = normalize(vec3(dir * bend * 1.7, 1.0));
+        vec3 Lg = normalize(vec3(-0.5, 0.7, 0.9));
+        g += WHITE * pow(max(dot(reflect(-Lg, gn), vec3(0.0, 0.0, 1.0)), 0.0), 48.0) * 0.4;
+        float side = 0.5 + 0.5 * dot(dir, normalize(vec2(-0.6, 0.8)));
+        g += WHITE * exp(-pow(edge / 1.0, 2.0)) * (0.12 + 0.5 * side);
+        g += WHITE * exp(-pow((edge - 3.5) / 2.5, 2.0)) * 0.12 * (1.0 - side);
+        float a = 1.0 - smoothstep(R - 1.0, R + 0.5, gd);
+        col = mix(col, g, a);
       }
     }
 
@@ -199,6 +228,11 @@
   // =====================================================================
   // Water renderer
   // =====================================================================
+
+  const GRAVITY = 3200;      // px/s^2
+  const POUR_SPEED = 380;    // px/s at the tap
+  const HW_TOP = 7.5;        // stream half width at the top of the screen, px
+  const HW_BOTTOM = 3.6;     // stream half width where it meets the water, px
 
   class Water {
     constructor(canvas) {
@@ -212,15 +246,14 @@
       }
       this.gl = gl;
       this.canvas = canvas;
-      this.falling = [];
-      this.crowns = [];
       this.impulses = [];
-      this.timers = [];
       this.acc = 0;
       this.lastT = 0;
-      this.fallBuf = new Float32Array(6 * 4);
-      this.crownBuf = new Float32Array(8 * 4);
       this.impBuf = new Float32Array(8 * 4);
+      this.stream = { on: false, start: -10, stop: -10, contact: false };
+      this.foam = 0;
+      this.flow = 1;
+      this.glass = { x: 0, y: 0, r: 0, press: 0, target: 0 };
 
       this.gradProg = this.program(GRADIENT_FRAG);
       this.simProg = this.program(SIM_FRAG);
@@ -256,8 +289,7 @@
       const count = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
       for (let i = 0; i < count; i++) {
         const info = gl.getActiveUniform(p, i);
-        const name = info.name.replace(/\[0\]$/, '');
-        uniforms[name] = gl.getUniformLocation(p, info.name);
+        uniforms[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name);
       }
       return { p, u: uniforms };
     }
@@ -292,7 +324,6 @@
       this.cssH = cssH;
       this.canvas.width = Math.round(cssW * dpr);
       this.canvas.height = Math.round(cssH * dpr);
-
       for (const t of [this.grad, this.simA, this.simB]) {
         if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
       }
@@ -303,21 +334,40 @@
       this.simB = this.target(simW, simH, true);
     }
 
-    // x, y in CSS px from the top-left corner; size is the drop radius in px
-    addDrop(x, y, size, now) {
-      this.falling.push({ x, y: this.cssH - y, size, t0: now, dur: 0.26 + Math.random() * 0.08 });
+    // Where the stream lands, in css px from the top-left
+    setImpact(x, y) {
+      this.impactX = x;
+      this.impactY = this.cssH - y;
     }
 
-    impact(d, now) {
-      const u = d.x / this.cssW;
-      const v = d.y / this.cssH;
-      const r = (d.size * 1.35) / this.cssH;
-      this.impulses.push([u, v, r, -0.55 * (d.size / 6)]);
-      this.crowns.push({ x: d.x, y: d.y, size: d.size, t0: now });
-      // The Worthington jet falls back a moment later and sends a second, finer ring
-      this.timers.push({ at: now + 0.17 + Math.random() * 0.06, fn: () => {
-        this.impulses.push([u, v, r * 0.55, -0.32 * (d.size / 6)]);
-      } });
+    pour(now) {
+      if (this.stream.on) return;
+      this.stream = { on: true, start: now, stop: -10, contact: false };
+    }
+
+    close(now) {
+      if (!this.stream.on) return;
+      this.stream.on = false;
+      this.stream.stop = now;
+    }
+
+    // Top and bottom ends of the falling column, GL px
+    streamEnds(now) {
+      const top = this.cssH + 20;
+      const st = this.stream;
+      const fall = e => POUR_SPEED * e + 0.5 * GRAVITY * e * e;
+      const bottom = Math.max(this.impactY, top - fall(now - st.start));
+      if (st.on) return { top, bottom };
+      const e = now - st.stop;
+      // The tail leaves the tap and falls with the water; an unfinished head keeps falling too
+      return { top: top - fall(e), bottom: Math.max(this.impactY, bottom - fall(e) * 0.2) };
+    }
+
+    setGlass(x, y, r, pressed) {
+      this.glass.x = x;
+      this.glass.y = this.cssH - y;
+      this.glass.r = r;
+      this.glass.target = pressed ? 1 : 0;
     }
 
     frame(now) {
@@ -325,17 +375,26 @@
       const dt = Math.min(0.05, this.lastT ? now - this.lastT : 0.016);
       this.lastT = now;
 
-      for (let i = this.falling.length - 1; i >= 0; i--) {
-        const d = this.falling[i];
-        if ((now - d.t0) / d.dur >= 1) {
-          this.falling.splice(i, 1);
-          this.impact(d, now);
+      const ends = this.streamEnds(now);
+      const visible = ends.top > ends.bottom + 1;
+      const touching = visible && ends.bottom <= this.impactY + 0.5;
+      if (touching && !this.stream.contact) {
+        this.stream.contact = true;
+        this.impulses.push([this.impactX / this.cssW, this.impactY / this.cssH, 9 / this.cssH, -0.5]);
+      }
+      if (touching) {
+        const u = this.impactX / this.cssW;
+        const v = this.impactY / this.cssH;
+        for (let i = 0; i < 3; i++) {
+          const jx = (Math.random() - 0.5) * HW_BOTTOM * 1.6 / this.cssW;
+          const jy = (Math.random() - 0.5) * 3 / this.cssH;
+          const r = (HW_BOTTOM * 1.2 + Math.random() * 2.5) / this.cssH;
+          this.impulses.push([u + jx, v + jy, r, -(0.05 + Math.random() * 0.07) * this.flow]);
         }
       }
-      for (let i = this.timers.length - 1; i >= 0; i--) {
-        if (now >= this.timers[i].at) { this.timers[i].fn(); this.timers.splice(i, 1); }
-      }
-      this.crowns = this.crowns.filter(c => now - c.t0 < 0.4);
+      this.foam += ((touching ? 1 : 0) - this.foam) * Math.min(1, dt * (touching ? 10 : 3));
+      this.flow += (1 - this.flow) * Math.min(1, dt * 2.5);
+      this.glass.press += (this.glass.target - this.glass.press) * Math.min(1, dt * 12);
 
       gl.bindVertexArray(this.vao);
 
@@ -345,12 +404,12 @@
       gl.useProgram(this.gradProg.p);
       gl.uniform1f(this.gradProg.u.uTime, now);
       gl.uniform1f(this.gradProg.u.uAspect, this.cssW / this.cssH);
-      gl.uniform1f(this.gradProg.u.uSpeed, reduceMotion ? 0.012 : 0.03);
+      gl.uniform1f(this.gradProg.u.uSpeed, reduceMotion ? 0.02 : 0.07);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       // 2. Wave simulation at a fixed rate
       this.acc += dt;
-      let steps = Math.min(6, Math.floor(this.acc * 150));
+      const steps = Math.min(6, Math.floor(this.acc * 150));
       this.acc -= steps / 150;
       gl.useProgram(this.simProg.p);
       gl.uniform2f(this.simProg.u.uTexel, 1 / this.simA.w, 1 / this.simA.h);
@@ -363,26 +422,18 @@
         if (n) {
           this.impBuf.fill(0);
           for (let i = 0; i < n; i++) this.impBuf.set(this.impulses[i], i * 4);
-          this.impulses.splice(0, n);
           gl.uniform4fv(this.simProg.u.uImp, this.impBuf);
         }
+        this.impulses.splice(0, n);
         gl.uniform1i(this.simProg.u.uCount, n);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.simB.fbo);
         gl.bindTexture(gl.TEXTURE_2D, this.simA.tex);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         [this.simA, this.simB] = [this.simB, this.simA];
       }
+      if (this.impulses.length > 24) this.impulses.splice(0, this.impulses.length - 24);
 
       // 3. Composite
-      this.fallBuf.fill(0);
-      this.falling.slice(0, 6).forEach((d, i) => {
-        this.fallBuf.set([d.x, d.y, (now - d.t0) / d.dur, d.size], i * 4);
-      });
-      this.crownBuf.fill(0);
-      this.crowns.slice(-8).forEach((c, i) => {
-        this.crownBuf.set([c.x, c.y, now - c.t0, c.size], i * 4);
-      });
-
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       const r = this.renderProg;
@@ -396,8 +447,11 @@
       gl.uniform2f(r.u.uRes, this.cssW, this.cssH);
       gl.uniform2f(r.u.uSimTexel, 1 / this.simA.w, 1 / this.simA.h);
       gl.uniform1f(r.u.uTime, now);
-      gl.uniform4fv(r.u.uFall, this.fallBuf);
-      gl.uniform4fv(r.u.uCrown, this.crownBuf);
+      const widen = 0.9 + 0.12 * this.flow;
+      gl.uniform4f(r.u.uStreamA, this.impactX, this.impactY, ends.top, ends.bottom);
+      gl.uniform4f(r.u.uStreamB, HW_TOP * widen, HW_BOTTOM * widen, visible ? 1 : 0, this.foam);
+      const g = this.glass;
+      gl.uniform4f(r.u.uGlass, g.x, g.y, g.r * (1 + 0.07 * g.press), g.press);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.activeTexture(gl.TEXTURE0);
     }
@@ -552,45 +606,47 @@
     water = new Water(canvas);
   } catch (e) {
     console.warn(e);
+    document.body.classList.add('no-gl');
   }
 
-  const t0 = performance.now();
-  const now = () => (performance.now() - t0) / 1000;
-
-  function loop() {
-    if (water) water.frame(now());
-    requestAnimationFrame(loop);
+  // The stream lands centred, just above the words
+  const IMPACT_Y = 0.44;
+  function layout() {
+    if (!water) return;
+    water.resize();
+    water.setImpact(innerWidth / 2, innerHeight * IMPACT_Y);
   }
-  requestAnimationFrame(loop);
-
-  addEventListener('resize', () => water && water.resize());
-
-  function randomDrop(scale = 1) {
-    const w = innerWidth;
-    const h = innerHeight;
-    const x = w * (0.08 + Math.random() * 0.84);
-    const y = h * (0.12 + Math.random() * 0.7);
-    const size = (4.2 + Math.random() * 2.6) * scale;
-    if (water) water.addDrop(x, y, size, now());
-  }
+  layout();
+  addEventListener('resize', layout);
 
   let holding = false;
-  let drizzleTimer = null;
   let meterTimer = null;
   let resetTimer = null;
   let heardTimer = null;
   let wordCount = 0;
   let session = 0;
 
+  const t0 = performance.now();
+  const now = () => (performance.now() - t0) / 1000;
+
+  function loop() {
+    if (water) {
+      const rect = talk.getBoundingClientRect();
+      water.setGlass(rect.left + rect.width / 2, rect.top + rect.height / 2, rect.width / 2, holding);
+      water.frame(now());
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
   const listener = new (DEMO ? DemoListener : Listener)({
     onText(text) {
       if (!holding) return;
       wordsEl.classList.remove('placeholder');
       wordsEl.textContent = text.length > 150 ? `…${text.slice(-150).replace(/^\S*\s/, '')}` : text;
-      // Each new word lets a drop fall
+      // Each new word swells the stream a little
       const count = text.split(/\s+/).filter(Boolean).length;
-      const fresh = Math.min(3, count - wordCount);
-      for (let i = 0; i < fresh; i++) setTimeout(() => holding && randomDrop(), i * 120 + Math.random() * 60);
+      if (water && count > wordCount) water.flow = Math.min(1.8, water.flow + 0.25 * (count - wordCount));
       wordCount = Math.max(wordCount, count);
     },
     onError(kind) {
@@ -606,12 +662,6 @@
     noteEl.textContent = text;
     noteEl.hidden = false;
     wordsEl.textContent = '';
-  }
-
-  function drizzle() {
-    if (!holding) return;
-    randomDrop(0.85);
-    drizzleTimer = setTimeout(drizzle, reduceMotion ? 1400 : 650 + Math.random() * 700);
   }
 
   function setState(s) {
@@ -636,12 +686,11 @@
     wordsEl.textContent = 'Say what is on your mind';
     setState('listening');
     listener.start();
-    randomDrop();
-    drizzleTimer = setTimeout(drizzle, 500);
-    // Without speech-to-text, let the voice level call the drops
+    if (water) water.pour(now());
+    // Without speech-to-text, the voice level sets how hard the water runs
     if (!listener.SR) {
       meterTimer = setInterval(() => {
-        if (holding && Math.random() < listener.level * 0.5) randomDrop(0.8 + listener.level * 0.6);
+        if (holding && water) water.flow = Math.max(water.flow, 0.7 + listener.level);
       }, 90);
     }
   }
@@ -649,15 +698,15 @@
   function release() {
     if (!holding) return;
     holding = false;
-    clearTimeout(drizzleTimer);
     clearInterval(meterTimer);
+    if (water) water.close(now());
     setState('releasing');
     const mine = session;
     listener.stop().then(text => {
       if (mine !== session || holding) return;
       if (text) wordsEl.textContent = text.length > 150 ? `…${text.slice(-150).replace(/^\S*\s/, '')}` : text;
       wordsEl.classList.add('sink');
-      // Let the last drops land and the words sink before answering
+      // Let the last water land and the words sink before answering
       heardTimer = setTimeout(() => {
         if (mine !== session || holding) return;
         setState('heard');

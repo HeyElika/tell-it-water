@@ -1,6 +1,6 @@
 # Chumi: Tell it to water
 
-A mindfulness app for iPhone. Hold the button and say what is on your mind. While you speak, drops fall into a slowly moving gradient and ripple out like real water. Let go, the words sink, and the app tells you: *You were heard*.
+A mindfulness app for iPhone. Hold the button and say what is on your mind. While you speak, water runs from above into a slowly moving gradient and ripples out like a real basin. Let go, the words sink, and the app tells you: *You were heard*.
 
 ## Try it on iPhone
 
@@ -12,8 +12,9 @@ Add `?demo` to the URL to watch the flow with a scripted voice and no microphone
 
 ## How it works
 
-- **Water**: a GPU wave-equation height field (WebGL2, half-float ping-pong textures). Each drop is a falling water lens with its shadow, an impact crown, and a second smaller ring from the rebound jet. The surface refracts the colour field below and catches light on the ring crests.
-- **Gradient**: domain-warped noise in the moodboard palette (night ink, steel blue, teal haze, sage, a little chartreuse light).
-- **Listening**: Safari's speech recognition shows your words as you speak, and each new word lets a drop fall. Without speech recognition, the microphone level drives the drops instead.
+- **Water**: a GPU wave-equation height field (WebGL2, half-float ping-pong textures). A stream pours from the top of the screen, thinning and beading as it falls, and stirs the surface where it lands, with foam and air at the impact. Let go and the tail falls away, then the rings settle.
+- **Gradient**: soft drifting blobs over a warped field: powder-blue sky, warm taupe light, cream cloud and white haze.
+- **Glass button**: drawn in the same shader, so it really refracts the water beneath it, with a bent rim, slight colour split and a specular edge.
+- **Listening**: Safari's speech recognition shows your words as you speak, and each new word swells the stream. Without speech recognition, the microphone level sets how hard the water runs.
 
 No build step: `index.html`, `style.css`, `app.js`. Serve the folder over HTTPS (the microphone needs it).
