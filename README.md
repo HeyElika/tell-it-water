@@ -14,7 +14,7 @@ Add `?demo` to the URL to watch the flow with a scripted voice and no microphone
 
 - **Water**: a GPU wave-equation height field (WebGL2, half-float ping-pong textures). A stream pours from the top of the screen, thinning and beading as it falls, and stirs the surface where it lands, with foam and air at the impact. Let go and the tail falls away, then the rings settle.
 - **Gradient**: an aquarelle after the "Restful" moodboard image: aqua wash, sweeping violet and cobalt bands, thin coral and navy lines and cream arcs, dry-brush break-up and paper grain over everything.
-- **Rings**: the ripples are painted, cream on the crests and a cobalt wash in the troughs, broken up like pastel on rough paper.
+- **Rings**: no drawn outlines. The waves bend the paint beneath them and push it around (a displacement field that drifts, bleeds and slowly settles back), so the rings appear in the painting's own colours.
 - **Glass button**: drawn in the same shader, so it really refracts the water beneath it, with a bent rim, slight colour split and a specular edge.
 - **Listening**: Safari's speech recognition shows your words as you speak, and each new word swells the stream. Without speech recognition, the microphone level sets how hard the water runs.
 

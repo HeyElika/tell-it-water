@@ -67,6 +67,11 @@
     vec3 col = mix(C_AQUA_D, C_AQUA, smoothstep(0.0, 0.85, vUv.y));
     col = mix(col, C_BLOT, blot(q, vec2(A * 0.08, 0.93), 0.11) * 0.55);
     col = mix(col, C_BLOT, blot(q, vec2(A * 0.36, 0.86 + 0.02 * sin(t)), 0.07) * 0.4);
+    // Uneven pigment in the wash, plus soft violet and cream blooms around where the water lands
+    col = mix(col, C_BLOT, smoothstep(0.45, 0.8, fbm(q * 3.0 + 11.0)) * 0.35);
+    col = mix(col, C_VIOLET, blot(q, vec2(A * (0.66 + 0.05 * sin(t * 0.9)), 0.6), 0.13) * 0.45);
+    col = mix(col, C_CREAM, blot(q, vec2(A * (0.3 + 0.04 * cos(t)), 0.52), 0.1) * 0.35);
+    col = mix(col, C_CORAL, blot(q, vec2(A * 0.45, 0.62 + 0.03 * sin(t * 1.3)), 0.06) * 0.25);
 
     // Flow coordinate: bands sweep down to the right and lift again
     float c = q.y + 0.16 * sin(x * 3.0 + 0.4 + t * 0.8) - 0.18 * x;
@@ -120,6 +125,35 @@
     outColor = info;
   }`;
 
+  // Paint displacement: the waves push the colour field around and it slowly settles back.
+  const SMEAR_FRAG = `#version 300 es
+  precision highp float;
+  in vec2 vUv;
+  out vec4 outColor;
+  uniform sampler2D uSmear;
+  uniform sampler2D uHeight;
+  uniform vec2 uTexel;
+  uniform float uPush;
+  uniform float uRelax;
+
+  void main() {
+    vec2 d0 = texture(uSmear, vUv).rg;
+    // Carry the existing smear along itself so pushed paint keeps flowing,
+    // and let it diffuse so the paint bleeds softly instead of tearing
+    vec2 a = vUv - d0 * 0.06;
+    vec2 e = uTexel * 2.0;
+    vec2 d = texture(uSmear, a).rg * 0.36
+           + (texture(uSmear, a + vec2(e.x, 0.0)).rg + texture(uSmear, a - vec2(e.x, 0.0)).rg
+            + texture(uSmear, a + vec2(0.0, e.y)).rg + texture(uSmear, a - vec2(0.0, e.y)).rg) * 0.16;
+    float hl = texture(uHeight, vUv - vec2(e.x, 0.0)).r;
+    float hr = texture(uHeight, vUv + vec2(e.x, 0.0)).r;
+    float hd = texture(uHeight, vUv - vec2(0.0, e.y)).r;
+    float hu = texture(uHeight, vUv + vec2(0.0, e.y)).r;
+    d += vec2(hl - hr, hd - hu) * uPush;
+    d *= uRelax;
+    outColor = vec4(d, 0.0, 1.0);
+  }`;
+
   // Final composite: water surface, the running stream, foam where it lands,
   // and the glass button refracting everything beneath it.
   const RENDER_FRAG = `#version 300 es
@@ -128,6 +162,7 @@
   out vec4 outColor;
   uniform sampler2D uGrad;
   uniform sampler2D uSim;
+  uniform sampler2D uSmear;
   uniform vec2 uRes;        // css px, y up
   uniform vec2 uSimTexel;
   uniform float uTime;
@@ -139,7 +174,6 @@
   const vec3 LIGHT = vec3(-0.22, 0.42, 1.0);
   const vec3 WHITE = vec3(0.98, 0.985, 0.99);
   const vec3 CREAM = vec3(0.937, 0.910, 0.824);
-  const vec3 COBALT = vec3(0.227, 0.322, 0.769);
 
   // Paper grain, so everything reads as pigment on a rough sheet
   float grain(vec2 x) { return noise(x * 0.75) * 0.6 + noise(x * 1.9) * 0.4; }
@@ -147,21 +181,17 @@
   vec3 water(vec2 uv) {
     vec3 L = normalize(LIGHT);
     vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
-    float hl = texture(uSim, uv - vec2(uSimTexel.x, 0.0)).r;
-    float hr = texture(uSim, uv + vec2(uSimTexel.x, 0.0)).r;
-    float hd = texture(uSim, uv - vec2(0.0, uSimTexel.y)).r;
-    float hu = texture(uSim, uv + vec2(0.0, uSimTexel.y)).r;
-    vec3 n = normalize(vec3((hl - hr) * 1.6, (hd - hu) * 1.6, 1.0));
-    vec3 col = texture(uGrad, uv + n.xy * 45.0 / uRes).rgb;
+    vec2 e = uSimTexel * 2.0;
+    float hl = texture(uSim, uv - vec2(e.x, 0.0)).r;
+    float hr = texture(uSim, uv + vec2(e.x, 0.0)).r;
+    float hd = texture(uSim, uv - vec2(0.0, e.y)).r;
+    float hu = texture(uSim, uv + vec2(0.0, e.y)).r;
+    vec3 n = normalize(vec3((hl - hr) * 4.0, (hd - hu) * 4.0, 1.0));
+    // No outlines: the waves only bend and push the paint, so rings appear in its own colours
+    vec2 smear = texture(uSmear, uv).rg;
+    vec3 col = texture(uGrad, uv + smear + n.xy * 170.0 / uRes).rgb;
     float facing = dot(n.xy, normalize(L.xy));
-    col *= 1.0 + clamp(facing * 1.2, -0.12, 0.14);
-    // Rings painted as strokes: cream on the crests, a cobalt wash in the troughs
-    float h = texture(uSim, uv).r;
-    float dry = 0.5 + 0.5 * smoothstep(0.2, 0.8, noise(uv * uRes * 0.32));
-    col = mix(col, CREAM, smoothstep(0.003, 0.022, h) * 0.75 * dry);
-    col = mix(col, COBALT, smoothstep(0.003, 0.022, -h) * 0.3 * dry);
-    float nh = max(dot(n, H), 0.0);
-    col += WHITE * pow(nh, 1400.0) * 0.25;
+    col *= 1.0 + clamp(facing * 1.2, -0.12, 0.13);
     return col;
   }
 
@@ -283,6 +313,7 @@
 
       this.gradProg = this.program(GRADIENT_FRAG);
       this.simProg = this.program(SIM_FRAG);
+      this.smearProg = this.program(SMEAR_FRAG);
       this.renderProg = this.program(RENDER_FRAG);
 
       this.vao = gl.createVertexArray();
@@ -350,7 +381,7 @@
       this.cssH = cssH;
       this.canvas.width = Math.round(cssW * dpr);
       this.canvas.height = Math.round(cssH * dpr);
-      for (const t of [this.grad, this.simA, this.simB]) {
+      for (const t of [this.grad, this.simA, this.simB, this.smearA, this.smearB]) {
         if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
       }
       this.grad = this.target(Math.max(64, Math.round(cssW * 0.5)), Math.max(64, Math.round(cssH * 0.5)), false);
@@ -358,6 +389,8 @@
       const simH = Math.round(simW * cssH / cssW);
       this.simA = this.target(simW, simH, true);
       this.simB = this.target(simW, simH, true);
+      this.smearA = this.target(simW, simH, true);
+      this.smearB = this.target(simW, simH, true);
     }
 
     // Where the stream lands, in css px from the top-left
@@ -406,16 +439,16 @@
       const touching = visible && ends.bottom <= this.impactY + 0.5;
       if (touching && !this.stream.contact) {
         this.stream.contact = true;
-        this.impulses.push([this.impactX / this.cssW, this.impactY / this.cssH, 9 / this.cssH, -0.5]);
+        this.impulses.push([this.impactX / this.cssW, this.impactY / this.cssH, 26 / this.cssH, -0.7]);
       }
       if (touching) {
         const u = this.impactX / this.cssW;
         const v = this.impactY / this.cssH;
         for (let i = 0; i < 3; i++) {
-          const jx = (Math.random() - 0.5) * HW_BOTTOM * 1.6 / this.cssW;
-          const jy = (Math.random() - 0.5) * 3 / this.cssH;
-          const r = (HW_BOTTOM * 1.2 + Math.random() * 2.5) / this.cssH;
-          this.impulses.push([u + jx, v + jy, r, -(0.05 + Math.random() * 0.07) * this.flow]);
+          const jx = (Math.random() - 0.5) * HW_BOTTOM * 2 / this.cssW;
+          const jy = (Math.random() - 0.5) * 4 / this.cssH;
+          const r = (11 + Math.random() * 7) / this.cssH;
+          this.impulses.push([u + jx, v + jy, r, -(0.035 + Math.random() * 0.045) * this.flow]);
         }
       }
       this.foam += ((touching ? 1 : 0) - this.foam) * Math.min(1, dt * (touching ? 10 : 3));
@@ -459,7 +492,22 @@
       }
       if (this.impulses.length > 24) this.impulses.splice(0, this.impulses.length - 24);
 
-      // 3. Composite
+      // 3. Paint displacement driven by the waves
+      gl.useProgram(this.smearProg.p);
+      gl.uniform2f(this.smearProg.u.uTexel, 1 / this.simA.w, 1 / this.simA.h);
+      gl.uniform1f(this.smearProg.u.uPush, 0.08);
+      gl.uniform1f(this.smearProg.u.uRelax, 0.988);
+      gl.uniform1i(this.smearProg.u.uSmear, 0);
+      gl.uniform1i(this.smearProg.u.uHeight, 1);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.smearB.fbo);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.smearA.tex);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.simA.tex);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      [this.smearA, this.smearB] = [this.smearB, this.smearA];
+
+      // 4. Composite
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       const r = this.renderProg;
@@ -470,6 +518,9 @@
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.simA.tex);
       gl.uniform1i(r.u.uSim, 1);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.smearA.tex);
+      gl.uniform1i(r.u.uSmear, 2);
       gl.uniform2f(r.u.uRes, this.cssW, this.cssH);
       gl.uniform2f(r.u.uSimTexel, 1 / this.simA.w, 1 / this.simA.h);
       gl.uniform1f(r.u.uTime, now);
