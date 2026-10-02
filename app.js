@@ -31,7 +31,8 @@
     return v;
   }`;
 
-  // Airy colour field: powder-blue sky, warm taupe light, cream cloud, soft white haze.
+  // Aquarelle field after the "Restful" moodboard image: an aqua wash with
+  // sweeping painted bands of violet and cobalt, thin coral and navy lines, cream arcs.
   const GRADIENT_FRAG = `#version 300 es
   precision highp float;
   in vec2 vUv;
@@ -40,36 +41,48 @@
   uniform float uAspect;
   uniform float uSpeed;
 
-  const vec3 C_SKY_TOP = vec3(0.447, 0.596, 0.714);
-  const vec3 C_SKY     = vec3(0.553, 0.682, 0.776);
-  const vec3 C_DEEP    = vec3(0.400, 0.545, 0.659);
-  const vec3 C_TAUPE   = vec3(0.722, 0.635, 0.573);
-  const vec3 C_PEACH   = vec3(0.835, 0.737, 0.671);
-  const vec3 C_CREAM   = vec3(0.941, 0.933, 0.914);
-  const vec3 C_HAZE    = vec3(0.871, 0.902, 0.918);
+  const vec3 C_AQUA   = vec3(0.612, 0.769, 0.784);
+  const vec3 C_AQUA_D = vec3(0.435, 0.639, 0.678);
+  const vec3 C_BLOT   = vec3(0.310, 0.540, 0.610);
+  const vec3 C_CREAM  = vec3(0.937, 0.910, 0.824);
+  const vec3 C_VIOLET = vec3(0.545, 0.533, 0.839);
+  const vec3 C_COBALT = vec3(0.227, 0.322, 0.769);
+  const vec3 C_CORAL  = vec3(0.878, 0.565, 0.486);
+  const vec3 C_NAVY   = vec3(0.122, 0.169, 0.231);
   ${NOISE}
 
-  float blob(vec2 p, vec2 c, float r) {
-    vec2 d = p - c;
-    return exp(-dot(d, d) / (r * r));
-  }
+  float band(float c, float c0, float w) { return exp(-pow((c - c0) / w, 2.0)); }
+  float blot(vec2 p, vec2 c, float r) { vec2 d = p - c; return exp(-dot(d, d) / (r * r)); }
 
   void main() {
     float A = uAspect;
     vec2 p = vec2(vUv.x * A, vUv.y);
     float t = uTime * uSpeed;
-    // Warp the space so blob edges read as cloud and mist rather than circles
-    vec2 w = vec2(fbm(p * 1.3 + vec2(t * 0.7, 0.0)), fbm(p * 1.3 + vec2(4.0, -t * 0.6))) - 0.5;
-    vec2 q = p + w * 0.32;
+    vec2 w = vec2(fbm(p * 1.6 + vec2(t * 0.6, 0.0)), fbm(p * 1.6 + vec2(3.7, -t * 0.5))) - 0.5;
+    vec2 q = p + w * 0.3 + (vec2(noise(p * 14.0), noise(p * 14.0 + 7.0)) - 0.5) * 0.012;
+    float x = q.x / A;
+    // Dry-brush break-up along each stroke
+    float dry = 0.45 + 0.55 * smoothstep(0.2, 0.8, noise(q * vec2(7.0, 30.0)) * 0.7 + noise(q * 60.0) * 0.3);
 
-    vec3 col = mix(C_SKY, C_SKY_TOP, smoothstep(0.15, 1.0, vUv.y));
-    col = mix(col, C_DEEP, blob(q, vec2(A * 1.05, 0.98 + 0.03 * sin(t * 1.1)), 0.36) * 0.55);
-    col = mix(col, C_DEEP, blob(q, vec2(-0.05, 0.62 + 0.05 * cos(t * 0.9)), 0.24) * 0.3);
-    col = mix(col, C_TAUPE, blob(q, vec2(A * (0.64 + 0.12 * sin(t * 0.8 + 1.0)), 0.44 + 0.06 * sin(t * 1.2)), 0.27) * 0.8);
-    col = mix(col, C_PEACH, blob(q, vec2(A * (0.6 + 0.1 * sin(t * 0.8 + 1.4)), 0.47 + 0.05 * sin(t * 1.2 + 0.3)), 0.15) * 0.55);
-    col = mix(col, C_HAZE, blob(q, vec2(A * (0.38 + 0.1 * cos(t * 0.7)), 0.8 + 0.04 * sin(t)), 0.25) * 0.75);
-    col = mix(col, C_CREAM, blob(q, vec2(A * (0.02 + 0.08 * sin(t * 1.3)), 0.02 + 0.04 * cos(t)), 0.26) * 0.85);
-    col = mix(col, C_HAZE, blob(q, vec2(A * (0.95 + 0.06 * cos(t * 1.1)), 0.2), 0.2) * 0.4);
+    vec3 col = mix(C_AQUA_D, C_AQUA, smoothstep(0.0, 0.85, vUv.y));
+    col = mix(col, C_BLOT, blot(q, vec2(A * 0.08, 0.93), 0.11) * 0.55);
+    col = mix(col, C_BLOT, blot(q, vec2(A * 0.36, 0.86 + 0.02 * sin(t)), 0.07) * 0.4);
+
+    // Flow coordinate: bands sweep down to the right and lift again
+    float c = q.y + 0.16 * sin(x * 3.0 + 0.4 + t * 0.8) - 0.18 * x;
+    col = mix(col, C_VIOLET, band(c, 0.40, 0.055) * 0.7);
+    col = mix(col, C_COBALT, band(c, 0.22, 0.05) * 0.8);
+    col = mix(col, C_COBALT, band(c, 0.11, 0.035) * 0.55);
+    col = mix(col, C_CORAL, band(c, 0.31, 0.014) * 0.75 * dry);
+    col = mix(col, C_CORAL, band(c, 0.165, 0.012) * 0.6 * dry);
+    col = mix(col, C_NAVY, band(c, 0.335, 0.007) * 0.7 * dry);
+    col = mix(col, C_NAVY, band(c, 0.065, 0.0065) * 0.55 * dry);
+
+    // Cream arcs: a long sweep from the upper left, a short one on the right
+    float arc1 = length(q - vec2(A * 1.05, 1.02 + 0.02 * sin(t * 0.7))) - 0.82;
+    col = mix(col, C_CREAM, band(arc1, 0.0, 0.011) * 0.85 * dry);
+    float arc2 = length(q - vec2(A * 0.5, 1.32)) - 0.66;
+    col = mix(col, C_CREAM, band(arc2, 0.0, 0.01) * 0.8 * dry * smoothstep(0.5, 0.75, x));
     outColor = vec4(col, 1.0);
   }`;
 
@@ -125,6 +138,11 @@
 
   const vec3 LIGHT = vec3(-0.22, 0.42, 1.0);
   const vec3 WHITE = vec3(0.98, 0.985, 0.99);
+  const vec3 CREAM = vec3(0.937, 0.910, 0.824);
+  const vec3 COBALT = vec3(0.227, 0.322, 0.769);
+
+  // Paper grain, so everything reads as pigment on a rough sheet
+  float grain(vec2 x) { return noise(x * 0.75) * 0.6 + noise(x * 1.9) * 0.4; }
 
   vec3 water(vec2 uv) {
     vec3 L = normalize(LIGHT);
@@ -134,11 +152,16 @@
     float hd = texture(uSim, uv - vec2(0.0, uSimTexel.y)).r;
     float hu = texture(uSim, uv + vec2(0.0, uSimTexel.y)).r;
     vec3 n = normalize(vec3((hl - hr) * 1.6, (hd - hu) * 1.6, 1.0));
-    vec3 col = texture(uGrad, uv + n.xy * 70.0 / uRes).rgb;
+    vec3 col = texture(uGrad, uv + n.xy * 45.0 / uRes).rgb;
     float facing = dot(n.xy, normalize(L.xy));
-    col *= 1.0 + clamp(facing * 1.8, -0.2, 0.22);
+    col *= 1.0 + clamp(facing * 1.2, -0.12, 0.14);
+    // Rings painted as strokes: cream on the crests, a cobalt wash in the troughs
+    float h = texture(uSim, uv).r;
+    float dry = 0.5 + 0.5 * smoothstep(0.2, 0.8, noise(uv * uRes * 0.32));
+    col = mix(col, CREAM, smoothstep(0.003, 0.022, h) * 0.75 * dry);
+    col = mix(col, COBALT, smoothstep(0.003, 0.022, -h) * 0.3 * dry);
     float nh = max(dot(n, H), 0.0);
-    col += WHITE * (pow(nh, 1400.0) * 0.9 + pow(nh, 160.0) * 0.08);
+    col += WHITE * pow(nh, 1400.0) * 0.25;
     return col;
   }
 
@@ -183,8 +206,8 @@
       float f1 = noise(dv * 0.42 + vec2(uTime * 13.0, -uTime * 9.0));
       float f2 = noise(dv * 0.95 + vec2(-uTime * 21.0, uTime * 17.0));
       float foam = smoothstep(0.5, 0.85, f1 * 0.6 + f2 * 0.5) * exp(-d2 / (r * r));
-      col = mix(col, WHITE, foam * 0.85 * foamAmt);
-      col += WHITE * exp(-d2 / (r * r * 0.5)) * 0.1 * foamAmt;
+      col = mix(col, CREAM, foam * 0.85 * foamAmt);
+      col += CREAM * exp(-d2 / (r * r * 0.5)) * 0.08 * foamAmt;
     }
 
     // ---------- Glass button ----------
@@ -221,7 +244,10 @@
       }
     }
 
-    col += (hash(px + fract(uTime) * 91.0) - 0.5) * 0.012;
+    float g0 = grain(px);
+    float relief = (grain(px + vec2(1.0, 0.0)) - g0) * -1.0 + (grain(px + vec2(0.0, 1.0)) - g0);
+    col *= (0.96 + 0.07 * g0) * (1.0 + relief * 0.22);
+    col += (hash(px + fract(uTime) * 91.0) - 0.5) * 0.01;
     outColor = vec4(col, 1.0);
   }`;
 

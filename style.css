@@ -27,7 +27,7 @@ html, body {
 body {
   position: fixed;
   inset: 0;
-  background: var(--sky);
+  background: #9cc4c8;
   color: var(--text);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
