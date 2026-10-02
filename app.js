@@ -91,67 +91,70 @@
     outColor = vec4(col, 1.0);
   }`;
 
-  // Height-field wave equation. r = height, g = velocity.
+  // Water on wet watercolour. r = water on the sheet, gb = how far the pigment has been
+  // carried (uv), a = pigment piled up at the edge of the bloom.
+  // Water spreads like a porous-medium flow: faster where there is more of it, so the
+  // front stays crisp, and unevenly across the paper fibres, so the edge fringes.
   const SIM_FRAG = `#version 300 es
   precision highp float;
   in vec2 vUv;
   out vec4 outColor;
   uniform sampler2D uState;
   uniform vec2 uTexel;
+  uniform vec2 uRes;
   uniform float uAspect;
+  uniform float uEvap;
   uniform int uCount;
-  uniform vec4 uImp[8]; // uv.x, uv.y, radius (height units), strength
+  uniform vec4 uImp[8]; // uv.x, uv.y, radius (height units), water amount
+  ${NOISE}
+
+  float paper(vec2 px) {
+    return noise(px * 0.21) * 0.5 + noise(px * 0.63 + 9.0) * 0.32 + noise(px * 1.8 + 3.0) * 0.18;
+  }
+
+  float flowTo(float a, float b, float k) {
+    return min(0.22, k * pow(max(0.5 * (a + b), 0.0), 1.2)) * (a - b);
+  }
 
   void main() {
-    vec4 info = texture(uState, vUv);
-    float l = texture(uState, vUv - vec2(uTexel.x, 0.0)).r;
-    float r = texture(uState, vUv + vec2(uTexel.x, 0.0)).r;
-    float d = texture(uState, vUv - vec2(0.0, uTexel.y)).r;
-    float u = texture(uState, vUv + vec2(0.0, uTexel.y)).r;
-    float avg = (l + r + d + u) * 0.25;
-    info.g += (avg - info.r) * 1.96;
-    info.g *= 0.992;
-    info.r += info.g;
-    info.r *= 0.999;
+    vec4 s = texture(uState, vUv);
+    vec4 sl = texture(uState, vUv - vec2(uTexel.x, 0.0));
+    vec4 sr = texture(uState, vUv + vec2(uTexel.x, 0.0));
+    vec4 sd = texture(uState, vUv - vec2(0.0, uTexel.y));
+    vec4 su = texture(uState, vUv + vec2(0.0, uTexel.y));
+    float wl = sl.r, wr = sr.r, wd = sd.r, wu = su.r;
+    vec2 px = vUv * uRes;
+    float k = 3.0 * mix(0.06, 1.0, smoothstep(0.3, 0.7, paper(px)));
+
+    float w = s.r;
+    w += flowTo(wl, w, k) + flowTo(wr, w, k) + flowTo(wd, w, k) + flowTo(wu, w, k);
+
+    // Pigment rides outward with the water
+    vec2 g = vec2(wr - wl, wu - wd);
+    float mob = min(0.22, k * pow(max(w, 0.0), 1.2));
+    // Carried pigment blurs a little as it travels, so it bleeds instead of tearing
+    vec2 carry = mix(s.gb, (sl.gb + sr.gb + sd.gb + su.gb) * 0.25, 0.5) - g * mob * 0.008;
+    float cl = length(carry);
+    if (cl > 0.06) carry *= 0.06 / cl;
+
+    // The edge of a bloom collects pigment; once dry, that line stays and slowly fades
+    float edge = smoothstep(0.004, 0.05, length(g)) * (1.0 - smoothstep(0.03, 0.3, w));
+    float dep = s.a;
+    if (w > 0.003) {
+      dep = mix(dep, max(dep * 0.985, edge), 0.18);
+    } else {
+      dep *= 0.9993;
+      carry *= 0.9975;
+    }
+    w = max(0.0, w - uEvap);
 
     for (int i = 0; i < 8; i++) {
       if (i >= uCount) break;
       vec4 im = uImp[i];
-      float dist = length((vUv - im.xy) * vec2(uAspect, 1.0)) / im.z;
-      if (dist < 1.0) {
-        info.r += (0.5 + 0.5 * cos(dist * 3.14159265)) * im.w;
-      }
+      float d = length((vUv - im.xy) * vec2(uAspect, 1.0)) / im.z;
+      if (d < 1.0) w += (1.0 - d * d) * im.w;
     }
-    outColor = info;
-  }`;
-
-  // Paint displacement: the waves push the colour field around and it slowly settles back.
-  const SMEAR_FRAG = `#version 300 es
-  precision highp float;
-  in vec2 vUv;
-  out vec4 outColor;
-  uniform sampler2D uSmear;
-  uniform sampler2D uHeight;
-  uniform vec2 uTexel;
-  uniform float uPush;
-  uniform float uRelax;
-
-  void main() {
-    vec2 d0 = texture(uSmear, vUv).rg;
-    // Carry the existing smear along itself so pushed paint keeps flowing,
-    // and let it diffuse so the paint bleeds softly instead of tearing
-    vec2 a = vUv - d0 * 0.06;
-    vec2 e = uTexel * 2.0;
-    vec2 d = texture(uSmear, a).rg * 0.36
-           + (texture(uSmear, a + vec2(e.x, 0.0)).rg + texture(uSmear, a - vec2(e.x, 0.0)).rg
-            + texture(uSmear, a + vec2(0.0, e.y)).rg + texture(uSmear, a - vec2(0.0, e.y)).rg) * 0.16;
-    float hl = texture(uHeight, vUv - vec2(e.x, 0.0)).r;
-    float hr = texture(uHeight, vUv + vec2(e.x, 0.0)).r;
-    float hd = texture(uHeight, vUv - vec2(0.0, e.y)).r;
-    float hu = texture(uHeight, vUv + vec2(0.0, e.y)).r;
-    d += vec2(hl - hr, hd - hu) * uPush;
-    d *= uRelax;
-    outColor = vec4(d, 0.0, 1.0);
+    outColor = vec4(w, carry, dep);
   }`;
 
   // Final composite: water surface, the running stream, foam where it lands,
@@ -162,7 +165,6 @@
   out vec4 outColor;
   uniform sampler2D uGrad;
   uniform sampler2D uSim;
-  uniform sampler2D uSmear;
   uniform vec2 uRes;        // css px, y up
   uniform vec2 uSimTexel;
   uniform float uTime;
@@ -178,20 +180,21 @@
   // Paper grain, so everything reads as pigment on a rough sheet
   float grain(vec2 x) { return noise(x * 0.75) * 0.6 + noise(x * 1.9) * 0.4; }
 
+  const vec3 PAPER = vec3(0.93, 0.935, 0.9);
+
   vec3 water(vec2 uv) {
-    vec3 L = normalize(LIGHT);
-    vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
-    vec2 e = uSimTexel * 2.0;
-    float hl = texture(uSim, uv - vec2(e.x, 0.0)).r;
-    float hr = texture(uSim, uv + vec2(e.x, 0.0)).r;
-    float hd = texture(uSim, uv - vec2(0.0, e.y)).r;
-    float hu = texture(uSim, uv + vec2(0.0, e.y)).r;
-    vec3 n = normalize(vec3((hl - hr) * 4.0, (hd - hu) * 4.0, 1.0));
-    // No outlines: the waves only bend and push the paint, so rings appear in its own colours
-    vec2 smear = texture(uSmear, uv).rg;
-    vec3 col = texture(uGrad, uv + smear + n.xy * 170.0 / uRes).rgb;
-    float facing = dot(n.xy, normalize(L.xy));
-    col *= 1.0 + clamp(facing * 1.2, -0.12, 0.13);
+    vec4 st = texture(uSim, uv);
+    float w = st.r;
+    vec3 base = texture(uGrad, uv - st.gb).rgb;
+    // Inside a bloom the water dilutes the pigment toward the paper
+    float wet = smoothstep(0.0, 0.45, w);
+    vec3 col = mix(base, mix(base, PAPER, 0.32), wet * 0.75);
+    // Pigment pushed to the rim settles as a deeper line of the same colour
+    float lum = dot(base, vec3(0.299, 0.587, 0.114));
+    vec3 dense = mix(vec3(lum), base, 1.35) * 0.74;
+    col = mix(col, dense, clamp(st.a * 1.4, 0.0, 1.0) * 0.6);
+    // Standing water keeps a faint sheen
+    col += vec3(0.03) * smoothstep(0.2, 0.9, w);
     return col;
   }
 
@@ -313,7 +316,6 @@
 
       this.gradProg = this.program(GRADIENT_FRAG);
       this.simProg = this.program(SIM_FRAG);
-      this.smearProg = this.program(SMEAR_FRAG);
       this.renderProg = this.program(RENDER_FRAG);
 
       this.vao = gl.createVertexArray();
@@ -367,7 +369,7 @@
       const fbo = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-      gl.clearColor(0, 0, 0, 1);
+      gl.clearColor(0, 0, 0, float ? 0 : 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       return { tex, fbo, w, h };
     }
@@ -381,7 +383,7 @@
       this.cssH = cssH;
       this.canvas.width = Math.round(cssW * dpr);
       this.canvas.height = Math.round(cssH * dpr);
-      for (const t of [this.grad, this.simA, this.simB, this.smearA, this.smearB]) {
+      for (const t of [this.grad, this.simA, this.simB]) {
         if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
       }
       this.grad = this.target(Math.max(64, Math.round(cssW * 0.5)), Math.max(64, Math.round(cssH * 0.5)), false);
@@ -389,8 +391,6 @@
       const simH = Math.round(simW * cssH / cssW);
       this.simA = this.target(simW, simH, true);
       this.simB = this.target(simW, simH, true);
-      this.smearA = this.target(simW, simH, true);
-      this.smearB = this.target(simW, simH, true);
     }
 
     // Where the stream lands, in css px from the top-left
@@ -439,16 +439,24 @@
       const touching = visible && ends.bottom <= this.impactY + 0.5;
       if (touching && !this.stream.contact) {
         this.stream.contact = true;
-        this.impulses.push([this.impactX / this.cssW, this.impactY / this.cssH, 26 / this.cssH, -0.7]);
+        this.impulses.push([this.impactX / this.cssW, this.impactY / this.cssH, 16 / this.cssH, 0.9]);
       }
       if (touching) {
         const u = this.impactX / this.cssW;
         const v = this.impactY / this.cssH;
-        for (let i = 0; i < 3; i++) {
-          const jx = (Math.random() - 0.5) * HW_BOTTOM * 2 / this.cssW;
-          const jy = (Math.random() - 0.5) * 4 / this.cssH;
-          const r = (11 + Math.random() * 7) / this.cssH;
-          this.impulses.push([u + jx, v + jy, r, -(0.035 + Math.random() * 0.045) * this.flow]);
+        const jx = (Math.random() - 0.5) * HW_BOTTOM * 2 / this.cssW;
+        const jy = (Math.random() - 0.5) * 3 / this.cssH;
+        this.impulses.push([u + jx, v + jy, (9 + Math.random() * 4) / this.cssH, Math.min(0.5, dt * 60 * 0.28) * this.flow]);
+        // Splashes throw small drops that land and bloom on their own
+        if (Math.random() < dt * 0.9) {
+          const ang = Math.random() * Math.PI * 2;
+          const dist = 45 + Math.random() * 110;
+          this.impulses.push([
+            (this.impactX + Math.cos(ang) * dist) / this.cssW,
+            (this.impactY + Math.sin(ang) * dist * 0.8) / this.cssH,
+            (3 + Math.random() * 4) / this.cssH,
+            0.5 + Math.random() * 0.4,
+          ]);
         }
       }
       this.foam += ((touching ? 1 : 0) - this.foam) * Math.min(1, dt * (touching ? 10 : 3));
@@ -466,13 +474,15 @@
       gl.uniform1f(this.gradProg.u.uSpeed, reduceMotion ? 0.02 : 0.07);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-      // 2. Wave simulation at a fixed rate
+      // 2. Water and pigment on the sheet, at a fixed rate
       this.acc += dt;
       const steps = Math.min(6, Math.floor(this.acc * 150));
       this.acc -= steps / 150;
       gl.useProgram(this.simProg.p);
       gl.uniform2f(this.simProg.u.uTexel, 1 / this.simA.w, 1 / this.simA.h);
       gl.uniform1f(this.simProg.u.uAspect, this.cssW / this.cssH);
+      gl.uniform2f(this.simProg.u.uRes, this.cssW, this.cssH);
+      gl.uniform1f(this.simProg.u.uEvap, this.stream.on ? 0.00004 : 0.00035);
       gl.uniform1i(this.simProg.u.uState, 0);
       gl.viewport(0, 0, this.simA.w, this.simA.h);
       gl.activeTexture(gl.TEXTURE0);
@@ -492,22 +502,7 @@
       }
       if (this.impulses.length > 24) this.impulses.splice(0, this.impulses.length - 24);
 
-      // 3. Paint displacement driven by the waves
-      gl.useProgram(this.smearProg.p);
-      gl.uniform2f(this.smearProg.u.uTexel, 1 / this.simA.w, 1 / this.simA.h);
-      gl.uniform1f(this.smearProg.u.uPush, 0.08);
-      gl.uniform1f(this.smearProg.u.uRelax, 0.988);
-      gl.uniform1i(this.smearProg.u.uSmear, 0);
-      gl.uniform1i(this.smearProg.u.uHeight, 1);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.smearB.fbo);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.smearA.tex);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, this.simA.tex);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      [this.smearA, this.smearB] = [this.smearB, this.smearA];
-
-      // 4. Composite
+      // 3. Composite
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       const r = this.renderProg;
@@ -518,9 +513,6 @@
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.simA.tex);
       gl.uniform1i(r.u.uSim, 1);
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, this.smearA.tex);
-      gl.uniform1i(r.u.uSmear, 2);
       gl.uniform2f(r.u.uRes, this.cssW, this.cssH);
       gl.uniform2f(r.u.uSimTexel, 1 / this.simA.w, 1 / this.simA.h);
       gl.uniform1f(r.u.uTime, now);

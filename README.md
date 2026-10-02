@@ -12,9 +12,9 @@ Add `?demo` to the URL to watch the flow with a scripted voice and no microphone
 
 ## How it works
 
-- **Water**: a GPU wave-equation height field (WebGL2, half-float ping-pong textures). A stream pours from the top of the screen, thinning and beading as it falls, and stirs the surface where it lands, with foam and air at the impact. Let go and the tail falls away, then the rings settle.
+- **Water**: a GPU simulation on half-float ping-pong textures (WebGL2). A stream pours from the top of the screen, thinning and beading as it falls, and blooms into the paint where it lands. Let go and the tail falls away.
 - **Gradient**: an aquarelle after the "Restful" moodboard image: aqua wash, sweeping violet and cobalt bands, thin coral and navy lines and cream arcs, dry-brush break-up and paper grain over everything.
-- **Rings**: no drawn outlines. The waves bend the paint beneath them and push it around (a displacement field that drifts, bleeds and slowly settles back), so the rings appear in the painting's own colours.
+- **Blooms**: water landing on the wet painting behaves like a watercolour backrun. It spreads as a porous-medium flow over a fibrous paper map, so the front stays crisp and fringed; it dilutes the pigment in the middle and carries it to the edge, where it settles as a darker line. Splashes make their own small blooms. When the water stops, the bloom dries, keeps its hard edge for a while, then fades.
 - **Glass button**: drawn in the same shader, so it really refracts the water beneath it, with a bent rim, slight colour split and a specular edge.
 - **Listening**: Safari's speech recognition shows your words as you speak, and each new word swells the stream. Without speech recognition, the microphone level sets how hard the water runs.
 
